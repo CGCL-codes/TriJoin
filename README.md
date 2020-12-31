@@ -14,7 +14,9 @@ Build and run the example
 mvn clean package
 
 ./storm jar ../target/Trijoin-1.0-SNAPSHOT.jar com.basic.core.Topology -n 90 -pr 45 -ps 45 -pt 45 -sf 8 -dp 8 -win -wl 2000 --remote --s random
- 
+
+```
+
 -pr -ps  -pt: partitions of relation R S T
 
 -sf -dp: instances of shuffle dispatcher
@@ -31,4 +33,3 @@ mvn clean package
 
 --s: partion scheme
 
-```
