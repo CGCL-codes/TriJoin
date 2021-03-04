@@ -115,7 +115,7 @@ public class Topology {
       JoinHashBolt joinerT = new JoinHashBolt("T","S", topologyArgs.barrierEnable,
               topologyArgs.barrierPeriod, topologyArgs.numDispatcher);
 
-      builder.setBolt(DISPATCHER_BOLT_ID, new DispatchBolt(), topologyArgs.numDispatcher)
+      builder.setBolt(DISPATCHER_BOLT_ID, new DispatchBolt(topologyArgs.barrierEnable,topologyArgs.barrierPeriod), topologyArgs.numDispatcher)
         .shuffleGrouping(SHUFFLE_BOLT_ID);
 
       builder.setBolt(JOINER_RS_BOLT_ID, joinerRS, topologyArgs.numPartitionsR)
@@ -139,7 +139,7 @@ public class Topology {
       JoinBolt joinerT = new JoinBolt("T", "R", "S", topologyArgs.barrierEnable,
               topologyArgs.barrierPeriod, topologyArgs.numDispatcher);
 
-      builder.setBolt(DISPATCHER_BOLT_ID, new DispatchBolt(), topologyArgs.numDispatcher)
+      builder.setBolt(DISPATCHER_BOLT_ID, new DispatchBolt(topologyArgs.barrierEnable,topologyArgs.barrierPeriod), topologyArgs.numDispatcher)
         .shuffleGrouping(SHUFFLE_BOLT_ID);
 
       builder.setBolt(JOINER_R_BOLT_ID, joinerR, topologyArgs.numPartitionsR)
