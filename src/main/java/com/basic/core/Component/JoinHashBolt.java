@@ -88,10 +88,12 @@ public class JoinHashBolt extends BaseBasicBolt {
   private Queue<Pair> indexQueueIRST;
 
   private FileWriter output;
-  private int tid;
+  private int tid, numDispatcher, seqDAi;
+  private long tst;
+  private long seqDisA[][];
 
 
-  public JoinHashBolt(String relation_main, String relation1, boolean be, long bp, int num) {
+  public JoinHashBolt(String relation_main, String relation1, boolean be, long bp, int numDisp) {
     super();
     taskRelation = relation_main;
     relationOne = relation1;
@@ -99,7 +101,9 @@ public class JoinHashBolt extends BaseBasicBolt {
     barrier = 0l;
     barrierEnable = be;
     barrierPeriod = bp;
-    numUpstreamTask = num;
+    numDispatcher = numDisp;
+    seqDAi = 100;
+    seqDisA  = new long[seqDAi][numDispatcher];
 
     if (!taskRelation.equals("R") && !taskRelation.equals("S") && !taskRelation.equals("T")) {
       LOG.error("Unknown relation: " + taskRelation);
@@ -140,7 +144,7 @@ public class JoinHashBolt extends BaseBasicBolt {
 
     tid = context.getThisTaskId();
     String prefix = "srj_joiner_" + taskRelation.toLowerCase() + tid;
-    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult/", prefix, "txt");
+    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult-HOS/", prefix, "txt");
   }
 
   @Override
@@ -158,15 +162,29 @@ public class JoinHashBolt extends BaseBasicBolt {
       latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - currentTime) / 1000;
     } else {
       long ts = tuple.getLongByField("timestamp");
-      long taskId = tuple.getSourceTask();
-      upstreamBarriers.put(taskId, ts);
 
-      long tempBarrier = checkBarrier();
-      if (tempBarrier > barrier) {
-        barrier = tempBarrier;
-        executeBufferedTuples(barrier * barrierPeriod, basicOutputCollector);
+      if (!barrierEnable) {
+        executeTuple(tuple, basicOutputCollector);
+        latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - currentTime) / 1000;
       } else {
-        bufferedTuples.offer(new SortedTuple(tuple, currentTime));
+        String rel = tuple.getStringByField("relation");
+        long tst = tuple.getLongByField("timestamp");
+        if(rel.equals("TimeStamp")){
+          long seqDisT = tuple.getLongByField("seq");
+          int seqAi = 0, seqAj = 0;
+          seqAi = (int)(seqDisT%seqDAi);
+          for(; seqAj < (numDispatcher-1); seqAj++){
+            if(seqDisA[seqAi][seqAj] != seqDisT){
+              seqDisA[seqAi][seqAj] = seqDisT;
+              break;
+            }
+          }
+          if(seqAj == (numDispatcher-1)){
+            executeBufferedTuples(tst, basicOutputCollector);
+          }
+        } else{
+          bufferedTuples.offer(new SortedTuple(tuple, currentTime));
+        }
       }
     }
 
@@ -194,13 +212,11 @@ public class JoinHashBolt extends BaseBasicBolt {
 
   public void executeTuple(Tuple tuple, BasicOutputCollector basicOutputCollector) {
     String rel = tuple.getStringByField("relation");
-    output("excuteTuple()!!!"+rel);
       if(rel.equals("R")||rel.equals("S")||rel.equals("T")){
         join(tuple, basicOutputCollector);/////store tuple, for R and S, emit it.
         numTuplesJoined++;
       } else{
         /// join T; join(intermediate, basicoutputcollector)，store IR tuple
-        //joinFinal(intermediateR, tuple, basicoutputcollector);
         join(tuple, basicOutputCollector);
       }
   }

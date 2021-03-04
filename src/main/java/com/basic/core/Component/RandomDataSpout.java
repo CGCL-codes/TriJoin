@@ -25,7 +25,7 @@ public class RandomDataSpout extends BaseRichSpout {
   private Random random;
   private SpoutOutputCollector spoutOutputCollector;
 
-  private final long tupleRate = 2000;
+  private final long tupleRate = 1000;
   private long tuplesPerTime;
   private BufferedReader bufferedReader;
   private final int intLower = 0;
@@ -49,7 +49,7 @@ public class RandomDataSpout extends BaseRichSpout {
 
     spoutOutputCollector = collector;
 
-    tuplesPerTime = tupleRate / 100;
+    tuplesPerTime = tupleRate;
 
     try {
       bufferedReader = new BufferedReader(new FileReader("/home/shuiyinyu/join/didi/" + rel + "/2.txt"));
@@ -76,7 +76,7 @@ public class RandomDataSpout extends BaseRichSpout {
 
     }
 
-    Utils.sleep(random.nextInt(100));
+    Utils.sleep(random.nextInt(1000));
   }
 
   public Values generateData() {

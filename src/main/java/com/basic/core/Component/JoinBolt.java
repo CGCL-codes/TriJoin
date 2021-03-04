@@ -86,9 +86,12 @@ public class JoinBolt extends BaseBasicBolt {
   private Queue<Pair> indexQueueIR2;
 
   private FileWriter output;
-  private int tid;
+  private int tid, numDispatcher, seqDAi;
+  private long tst;
+  private long seqDisA[][]; //
+//  private int[] seqA_h = new int[8];
 
-  public JoinBolt(String relation_main, String relation1, String relation2, boolean be, long bp, int num) {
+  public JoinBolt(String relation_main, String relation1, String relation2, boolean be, long bp, int numDisp) {
     super();
     taskRelation = relation_main;
     relationOne = relation1;
@@ -97,8 +100,10 @@ public class JoinBolt extends BaseBasicBolt {
     barrier = 0l;
     barrierEnable = be;
     barrierPeriod = bp;
-    numUpstreamTask = num;
-
+    tst = 0;
+    numDispatcher = numDisp;
+    seqDAi = 100;
+    seqDisA  = new long[seqDAi][numDispatcher];///
     if (!taskRelation.equals("R") && !taskRelation.equals("S") && !taskRelation.equals("T")) {
       LOG.error("Unknown relation: " + taskRelation);
     }
@@ -135,7 +140,7 @@ public class JoinBolt extends BaseBasicBolt {
 
     tid = context.getThisTaskId();
     String prefix = "srj_joiner_" + taskRelation.toLowerCase() + tid;
-    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult/", prefix, "txt");
+    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult-OrS/", prefix, "txt");
   }
 
   @Override
@@ -150,16 +155,24 @@ public class JoinBolt extends BaseBasicBolt {
       executeTuple(tuple, basicOutputCollector);
       latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - currentTime) / 1000;
     } else {
+      String rel = tuple.getStringByField("relation");
       long ts = tuple.getLongByField("timestamp");
-      long taskId = tuple.getSourceTask();
-      upstreamBarriers.put(taskId, ts);
-
-
-      long tempBarrier = checkBarrier();
-      if (tempBarrier > barrier) {
-        barrier = tempBarrier;
-        executeBufferedTuples(barrier * barrierPeriod, basicOutputCollector);
-      } else {
+      if(rel.equals("TimeStamp")){
+        long seqDisT = tuple.getLongByField("seq");
+        ///Comparing the "seq", all the seq is come?
+        int seqAi = 0, seqAj = 0;
+        seqAi = (int)(seqDisT%seqDAi);
+        for(; seqAj < (numDispatcher-1); seqAj++){
+          if(seqDisA[seqAi][seqAj] != seqDisT){
+            seqDisA[seqAi][seqAj] = seqDisT;
+            break;
+          }
+        }
+        if(seqAj == (numDispatcher-1)){
+          tst = ts;
+          executeBufferedTuples(tst, basicOutputCollector);
+        }
+      } else{///the generate tuple
         bufferedTuples.offer(new SortedTuple(tuple, currentTime));
       }
     }
@@ -182,13 +195,14 @@ public class JoinBolt extends BaseBasicBolt {
 
   public void executeTuple(Tuple tuple, BasicOutputCollector basicOutputCollector) {
     String rel = tuple.getStringByField("relation");
-      if (rel.equals(taskRelation)) {
-        store(tuple);
-        numTuplesStored++;
-      } else {
-        join(tuple, basicOutputCollector);
-        numTuplesJoined++;
-      }
+    Long ts = tuple.getLongByField("timestamp");
+    if (rel.equals(taskRelation) && (ts < tst)) {
+      store(tuple);
+      numTuplesStored++;
+    } else {
+      join(tuple, basicOutputCollector);
+      numTuplesJoined++;
+    }
   }
 
   private Long checkBarrier() {
@@ -202,12 +216,11 @@ public class JoinBolt extends BaseBasicBolt {
     return tempBarrier;
   }
 
-  public void executeBufferedTuples(Long barrier, BasicOutputCollector basicOutputCollector) {
+  public void executeBufferedTuples(Long tst, BasicOutputCollector basicOutputCollector) {
     while (!bufferedTuples.isEmpty()) {
       SortedTuple tempTuple = bufferedTuples.peek();
-      if (tempTuple.getTuple().getLongByField("timestamp") <= barrier) {
+      if (tempTuple.getTuple().getLongByField("timestamp") <= tst) {
         executeTuple(tempTuple.getTuple(), basicOutputCollector);
-        latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - tempTuple.getTimeStamp()) / 1000;
         bufferedTuples.poll();
       } else {
         break;

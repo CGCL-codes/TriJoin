@@ -24,10 +24,21 @@ import com.basic.core.Utils.FileWriter;
 public class DispatchBolt extends BaseBasicBolt {
 
   private static final Logger LOG = getLogger(DispatchBolt.class);
+  private long seqDis = 0;
+  private long barrierPeriod = 0;
+  private boolean barrierEnable = false;
+  private Date DLastBarrier = new Date();
+  private long dLastBarrier = DLastBarrier.getTime();
 
   @Override
   public void prepare(Map stormConf, TopologyContext context) {
     super.prepare(stormConf, context);
+
+  }
+
+  public DispatchBolt(boolean be, long bp){
+    barrierPeriod = bp;
+    barrierEnable = be;
   }
 
   @Override
@@ -35,11 +46,12 @@ public class DispatchBolt extends BaseBasicBolt {
     String rel = tuple.getStringByField("relation");
     Date date = new Date();
     Long ts = date.getTime();
+//    Long seq = seqDis;
     String key = tuple.getStringByField("key");
     String key2 = tuple.getStringByField("key2");
     String value = tuple.getStringByField("value");
 
-    Values values = new Values(rel, ts, key, key2, value);
+    Values values = new Values(rel, ts, seqDis, key, key2, value);
     if (rel.equals("R")) {
       basicOutputCollector.emit(SHUFFLE_R_STREAM_ID, values);
       basicOutputCollector.emit(BROADCAST_R_STREAM_ID, values);
@@ -49,6 +61,16 @@ public class DispatchBolt extends BaseBasicBolt {
     } else if (rel.equals("T")){
       basicOutputCollector.emit(SHUFFLE_T_STREAM_ID, values);
       basicOutputCollector.emit(BROADCAST_T_STREAM_ID, values);
+    }
+    Date dateNow = new Date();
+    long datenow = dateNow.getTime();
+    if(((datenow-dLastBarrier) > barrierPeriod) && barrierEnable){
+      seqDis = seqDis + 1;
+      dLastBarrier = datenow;
+      String relt = "TimeStamp";
+      Values timetuple = new Values(relt, datenow, seqDis, key, key2, value); ///key, key2, value 这三个值是没用的，只为共享模型
+
+      basicOutputCollector.emit(BROADCAST_R_STREAM_ID, timetuple);
     }
   }
 
