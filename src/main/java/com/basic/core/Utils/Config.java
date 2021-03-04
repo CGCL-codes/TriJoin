@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Properties;
 
 public class Config {
-  public static final List<String> SCHEMA = ImmutableList.of("relation", "timestamp", "key", "key2", "value");
+  public static final List<String> SCHEMA = ImmutableList.of("relation", "timestamp", "seq" ,"key", "key2", "value");
 
   public static final String KAFKA_SPOUT_ID_R ="kafka-spout-r";
   public static final String KAFKA_SPOUT_ID_S ="kafka-spout-s";
