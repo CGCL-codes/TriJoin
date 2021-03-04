@@ -89,7 +89,6 @@ public class JoinBolt extends BaseBasicBolt {
   private int tid, numDispatcher, seqDAi;
   private long tst;
   private long seqDisA[][]; //
-//  private int[] seqA_h = new int[8];
 
   public JoinBolt(String relation_main, String relation1, String relation2, boolean be, long bp, int numDisp) {
     super();
