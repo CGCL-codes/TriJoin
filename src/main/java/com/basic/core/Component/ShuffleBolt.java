@@ -15,8 +15,6 @@ import static com.basic.core.Utils.Config.SCHEMA;
 import static com.basic.core.Utils.CastUtils.getLong;
 import static org.slf4j.LoggerFactory.getLogger;
 
-import com.basic.core.Utils.FileWriter;
-
 public class ShuffleBolt extends BaseBasicBolt {
 
   private static final Logger LOG = getLogger(ShuffleBolt.class);
@@ -31,8 +29,6 @@ public class ShuffleBolt extends BaseBasicBolt {
   private Long tupleRate = 0l;
   private Long tuples = 0l;
   private Long last = System.nanoTime();
-
-  private FileWriter output;
 
   public ShuffleBolt(int rate) {
     super();
@@ -56,26 +52,30 @@ public class ShuffleBolt extends BaseBasicBolt {
     String topic = tuple.getStringByField("topic");
     String value = tuple.getStringByField("value");
     Long ts =  System.currentTimeMillis();
+    Long seq = 0L;
     String[] values = value.split(",");
 
     if (topic.equals(streamR)) {
       String rel = "R";
-      String key = values[2];
-      String key2 = values[3];
+      String key = values[3];
+      String key2 = values[4];
       numRTuples++;
-      basicOutputCollector.emit(new Values(rel, ts, key, key2, value));
+      value = "detail";
+      basicOutputCollector.emit(new Values(rel, ts, seq, key, key2, value));
     } else if (topic.equals(streamS)) {
       String rel = "S";
-      String key = values[2];
-      String key2 = values[3];
+      String key = values[3];
+      String key2 = values[4];
       numSTuples++;
-      basicOutputCollector.emit(new Values(rel, ts, key, key2, value));
+      value = "detail";
+      basicOutputCollector.emit(new Values(rel, ts, seq, key, key2, value));
     } else if (topic.equals(streamT)) {
       String rel = "T";
-      String key = values[2];
-      String key2 = values[3];
+      String key = values[3];
+      String key2 = values[4];
       numTTuples++;
-      basicOutputCollector.emit(new Values(rel, ts, key, key2, value));
+      value = "detail";
+      basicOutputCollector.emit(new Values(rel, ts, seq, key, key2, value));
     }
 
   }
@@ -85,8 +85,4 @@ public class ShuffleBolt extends BaseBasicBolt {
     outputFieldsDeclarer.declare(new Fields(SCHEMA));
   }
 
-  private void output(String msg) {
-    if (output != null)
-      output.write(msg);
-  }
 }

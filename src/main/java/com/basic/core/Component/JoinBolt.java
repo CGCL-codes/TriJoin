@@ -40,7 +40,7 @@ public class JoinBolt extends BaseBasicBolt {
 
   private static final Logger LOG = getLogger(JoinBolt.class);
   private static final List<String> METRIC_SCHEMA = ImmutableList.of("currentMoment", "tuples", "joinTimes",
-    "processingDuration", "latency", "resultNum");
+    "processingDuration", "latency", "resultNum", "numTuplePSec", "numIR_hub", "numMatch");
   private final String taskRelation;
   private final String relationOne;
   private final String relationTwo;
@@ -59,7 +59,12 @@ public class JoinBolt extends BaseBasicBolt {
   private long lastOutputTime;
   private double latency;
   private long latencyout;
-  private Date latencyoutD;
+  private long gapThrough;
+  private long countPSec;
+  private int numTuplePSec;
+  private int countRPSec;
+  private int countSPSec;
+  private int countTPSec;
 
   private int subIndexSize;
 
@@ -79,22 +84,28 @@ public class JoinBolt extends BaseBasicBolt {
 
   private Queue<Pair> indexQueue;
   private Multimap<Object, Values> currMap;
-  private Multimap<Object, Values> currMap1;
-  private Multimap<Object, String> currMapIR1;
-  private Multimap<Object, String> currMapIR2;
+  private Multimap<Object, String[]> currMapIR1;
+  private Multimap<Object, String[]> currMapIR2;
   private Queue<Pair> indexQueueIR1;
   private Queue<Pair> indexQueueIR2;
-
+  private Queue<Integer> numMatchHubQ1,numMatchHubQ2; ///准备用来测试有多少个中间结果在，包括hub tuple和与之匹配的tuple。
   private FileWriter output;
   private int tid, numDispatcher, seqDAi;
   private long tst;
   private long seqDisA[][]; //
+  private int numIR_hub1,numIR_hub2, numMatch1, numMatch2;
 
-  public JoinBolt(String relation_main, String relation1, String relation2, boolean be, long bp, int numDisp) {
+  private long numOutLatency, numResults;
+  private int numfinalR;
+  private long numIR, seqjOut;
+  private String JoinCondition;
+
+  public JoinBolt(String relation_main, String relation1, String relation2, boolean be, long bp, int numDisp, String jcond) {
     super();
     taskRelation = relation_main;
     relationOne = relation1;
     relationTwo = relation2;
+    JoinCondition = jcond;
 
     barrier = 0l;
     barrierEnable = be;
@@ -106,7 +117,19 @@ public class JoinBolt extends BaseBasicBolt {
     if (!taskRelation.equals("R") && !taskRelation.equals("S") && !taskRelation.equals("T")) {
       LOG.error("Unknown relation: " + taskRelation);
     }
-
+    countPSec = 0;
+    countRPSec = 0;
+    countSPSec = 0;
+    countTPSec = 0;
+    gapThrough = 0;
+    numIR_hub1 = 0;
+    numIR_hub2 = 0;
+    numMatch1 = 0;
+    numMatch2 = 0;
+    numOutLatency = 0;
+    numResults = 0;
+    latency = 0;
+    numIR = 0;
   }
 
   @Override
@@ -136,14 +159,18 @@ public class JoinBolt extends BaseBasicBolt {
     currMap = LinkedListMultimap.create(subIndexSize);
     currMapIR1 = LinkedListMultimap.create(subIndexSize);
     currMapIR2 = LinkedListMultimap.create(subIndexSize);
+    numMatchHubQ1 = new LinkedList<Integer>();
+    numMatchHubQ2 = new LinkedList<Integer>();
 
     tid = context.getThisTaskId();
     String prefix = "srj_joiner_" + taskRelation.toLowerCase() + tid;
-    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult-OrS/", prefix, "txt");
+    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpResult/TriJoin-R-TP-3500perS/", prefix, "txt");
+
   }
 
   @Override
   public void execute(Tuple tuple, BasicOutputCollector basicOutputCollector) {
+
     if (begin) {
       lastOutputTime = stopWatch.elapsed(TimeUnit.MILLISECONDS);
       begin = false;
@@ -152,7 +179,6 @@ public class JoinBolt extends BaseBasicBolt {
 
     if (!barrierEnable) {
       executeTuple(tuple, basicOutputCollector);
-      latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - currentTime) / 1000;
     } else {
       String rel = tuple.getStringByField("relation");
       long ts = tuple.getLongByField("timestamp");
@@ -171,37 +197,78 @@ public class JoinBolt extends BaseBasicBolt {
           tst = ts;
           executeBufferedTuples(tst, basicOutputCollector);
         }
+        seqjOut = seqAj;
       } else{///the generate tuple
         bufferedTuples.offer(new SortedTuple(tuple, currentTime));
       }
     }
 
+    String relR = tuple.getStringByField("relation");
+    if(relR.equals("R")||relR.equals("S")||relR.equals("T")){
+      countPSec++;
+    }
+
+    Date date = new Date();
+    long currentTime1 = date.getTime();
+    if(currentTime1 - gapThrough >= 1000) {
+      output("The count of R per Second:" + countRPSec);
+      output("\n");
+      output("The count of S per Second:" + countSPSec);
+      output("\n");
+      output("The count of T per Second:" + countTPSec);
+      output("\n");
+      countRPSec = 0;
+      countSPSec = 0;
+      countTPSec = 0;
+      gapThrough = currentTime1;
+      output("Time:" + stopWatch.elapsed(TimeUnit.MILLISECONDS) + "The number of hub1:"+numIR_hub1+", the number of tuple be matched 1:"+numMatch1+
+              ",the number of hub2:"+numIR_hub2+", the number of tuple be matched 2:"+numMatch2);
+      output("\n");
+      output("indexQueue.size()="+indexQueue.size()+",indexQueueIR1.size()="+indexQueueIR1.size()+",indexQueueIR2.size()="+indexQueueIR2.size());
+      output("\n");
+      output("currMap.size()="+currMap.size()+",currMapIR1.size()="+currMapIR1.size()+",currMapIR2.size()="+currMapIR2.size());
+      output("\n");
+      output("numfinalR="+numfinalR);
+      output("\n");
+    }
+
+
     if (isTimeToOutputProfile()) {
+
       long moment = stopWatch.elapsed(TimeUnit.SECONDS);
       long tuples = numTuplesStored + numTuplesJoined - numLastProcessed;
       long joinTimes = joinedTime - lastJoinedTime;
       long processingDuration = stopWatch.elapsed(TimeUnit.MILLISECONDS) - lastOutputTime;
-      long numResults = numJoinedResults - numLastJoinedResults;
-      basicOutputCollector.emit(METRIC_STREAM_ID, new Values(moment, tuples, joinTimes, processingDuration, latency,
-        numResults));
+
+      long numIR_hub = numIR_hub1 + numIR_hub2;
+      long numMatch = numMatch1 + numMatch2;
+      output("numOutLatency="+numOutLatency+",average latency="+latency/numOutLatency+",numResults="+numResults);
+      output("--------seqjOut="+seqjOut+",numDispatcher="+numDispatcher);
+      output("++++++numIR_hub="+numIR_hub+",numDispatcher="+numMatch);
+      basicOutputCollector.emit(METRIC_STREAM_ID, new Values(moment, numOutLatency, joinTimes, processingDuration, latency,
+                numResults, countPSec, numIR_hub, numMatch));
       numLastProcessed = numTuplesStored + numTuplesJoined;
       lastJoinedTime = joinedTime;
       lastOutputTime = stopWatch.elapsed(TimeUnit.MILLISECONDS);
       numJoinedResults = numLastJoinedResults;
-      latency = 0;
+      latency = 0; numOutLatency = 0; countPSec = 0;
+      numIR_hub1 = 0; numMatch1 = 0; numIR_hub2 = 0; numMatch2 = 0;
     }
   }
 
   public void executeTuple(Tuple tuple, BasicOutputCollector basicOutputCollector) {
     String rel = tuple.getStringByField("relation");
     Long ts = tuple.getLongByField("timestamp");
-    if (rel.equals(taskRelation) && (ts < tst)) {
+    if (rel.equals(taskRelation)) {
       store(tuple);
       numTuplesStored++;
     } else {
       join(tuple, basicOutputCollector);
       numTuplesJoined++;
     }
+    if(rel.equals("R"))countRPSec++;
+    else if(rel.equals("S"))countSPSec++;
+    else if(rel.equals("T"))countTPSec++;
   }
 
   private Long checkBarrier() {
@@ -232,15 +299,19 @@ public class JoinBolt extends BaseBasicBolt {
   public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
     outputFieldsDeclarer.declareStream(JOIN_RESULTS_STREAM_ID, new Fields("value", "rel"));
     outputFieldsDeclarer.declareStream(METRIC_STREAM_ID, new Fields(METRIC_SCHEMA));
+    outputFieldsDeclarer.declareStream(SR_RESULTSTREAM_ID, new Fields("relation", "timestamp", "seq", "key", "key2", "value"));
+    outputFieldsDeclarer.declareStream(ST_RESULTSTREAM_ID, new Fields("relation", "timestamp", "seq", "key", "key2", "value"));
   }
 
   public void store(Tuple tuple) {
     String rel = tuple.getStringByField("relation");
     Long ts = tuple.getLongByField("timestamp");
+    Long seq = tuple.getLongByField("seq");
     String key = tuple.getStringByField("key");
+    String key2 = tuple.getStringByField("key2");
     String value = tuple.getStringByField("value");
 
-    Values values = new Values(rel, ts, key, value);
+    Values values = new Values(rel, ts, seq, key, key2, value);
     currMap.put(key, values);
 
     if (currMap.size() >= subIndexSize) {
@@ -249,30 +320,48 @@ public class JoinBolt extends BaseBasicBolt {
     }
   }
 
-  public void store(Tuple tuple, String IRrel, String interresultS) {
+  public void store(Tuple tuple, int numFollower, String interresultS) {
     String rel = tuple.getStringByField("relation");
     Long ts = tuple.getLongByField("timestamp");
     String key = tuple.getStringByField("key");
-    String value = tuple.getStringByField("value");
+    String[] values = interresultS.split(",");
+//    int i = 0;
+    String mulTupleA[];
+    mulTupleA = new String[6*numFollower];
+    for(int i = 0; i < numFollower*6; i += 6) {
+      mulTupleA[i] = values[i];
+      mulTupleA[i + 1] = values[i + 1];
+      mulTupleA[i + 2] = values[i + 2];
+      mulTupleA[i + 3] = values[i + 3];
+      mulTupleA[i + 4] = values[i + 4];
+      mulTupleA[i + 5] = values[i + 5];
+    }
 
-    String valuess = rel+","+ts+","+key+","+value;
-    valuess += interresultS;
-
-    ///currMapIR1 store the intermediate result about relationone，currMapIR2 store the intermediate result about relationtwo.
-    if(IRrel.equals(relationOne)){
-      currMapIR1.put(key, valuess);
+    if(JoinCondition.equals("3JCondition") || (JoinCondition.equals("2JCondition") && taskRelation.equals("S"))){
+      if(rel.equals(relationOne)){
+        currMapIR1.put(key, mulTupleA);
+        numInterResultStoredOne++;
+        if (currMapIR1.size() >= subIndexSize){
+          indexQueueIR1.offer(ImmutablePair.of(ts, currMapIR1));
+          currMapIR1 = LinkedListMultimap.create(subIndexSize);
+        }
+      } else if(rel.equals(relationTwo)){
+        currMapIR2.put(key, mulTupleA);
+        numInterResultStoredTwo++;
+        if (currMapIR2.size() >= subIndexSize){
+          indexQueueIR2.offer(ImmutablePair.of(ts, currMapIR2));
+          currMapIR2 = LinkedListMultimap.create(subIndexSize);
+        }
+      }
+    }else {
+      currMapIR1.put(key, mulTupleA);
       numInterResultStoredOne++;
       if (currMapIR1.size() >= subIndexSize){
         indexQueueIR1.offer(ImmutablePair.of(ts, currMapIR1));
         currMapIR1 = LinkedListMultimap.create(subIndexSize);
       }
-    } else if(IRrel.equals(relationTwo)){
-      currMapIR2.put(key, valuess);numInterResultStoredTwo++;
-      if (currMapIR2.size() >= subIndexSize){
-        indexQueueIR2.offer(ImmutablePair.of(ts, currMapIR2));
-        currMapIR2 = LinkedListMultimap.create(subIndexSize);
-      }
     }
+
   }
 
   public void join(Tuple tuple, BasicOutputCollector basicOutputCollector) {
@@ -280,91 +369,192 @@ public class JoinBolt extends BaseBasicBolt {
     int numToDelete = 0, numToDelete1 = 0, numToDelete2 = 0;
     String rel = tuple.getStringByField("relation");
     String key = tuple.getStringByField("key");
-    boolean interResultYON = true;
+    boolean isInterResult = true;
 
     ///relation is relationone，need to join the intermediate result that relationtwo's queue and map join，and store IR of the tuple from taskrelation.
-    if(rel.equals(relationOne)){
-      for(Pair pairIRIndex2 : indexQueueIR2){
-        long ts = getLong(pairIRIndex2.getLeft());
-        if (isWindowJoin && !isInWindow(tsOpp, ts)){
-          ++numToDelete2;
-          continue;
+    if(JoinCondition.equals("3JCondition") || (JoinCondition.equals("2JCondition") && taskRelation.equals("S"))) {
+      if (rel.equals(relationOne)) {
+        for (Pair pairIRIndex2 : indexQueueIR2) {
+          long ts = getLong(pairIRIndex2.getLeft());
+          if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+            ++numToDelete2;
+            continue;
+          }
+          join(tuple, pairIRIndex2.getRight(), isInterResult, basicOutputCollector);
         }
-        join(tuple, pairIRIndex2.getRight(), interResultYON, basicOutputCollector);
-      }
-      join(tuple, currMapIR2, interResultYON, basicOutputCollector);
-    }else if(rel.equals(relationTwo)){
-      for(Pair pairIRIndex1 : indexQueueIR1){
-        long ts = getLong(pairIRIndex1.getLeft());
-        if (isWindowJoin && !isInWindow(tsOpp, ts)){
-          ++numToDelete1;
-          continue;
+        join(tuple, currMapIR2, isInterResult, basicOutputCollector);
+      } else if (rel.equals(relationTwo)) {
+        for (Pair pairIRIndex1 : indexQueueIR1) {
+          long ts = getLong(pairIRIndex1.getLeft());
+          if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+            ++numToDelete1;
+            continue;
+          }
+          join(tuple, pairIRIndex1.getRight(), isInterResult, basicOutputCollector);
         }
-        join(tuple, pairIRIndex1.getRight(), interResultYON, basicOutputCollector);
+        join(tuple, currMapIR1, isInterResult, basicOutputCollector);
       }
-      join(tuple, currMapIR1, interResultYON, basicOutputCollector);
-    }
-    Date date = new Date();
-    long currentTimeF = date.getTime();
-    latencyout = (currentTimeF - tsOpp);
-    latencyoutD = new Date(latencyout);
-    output("Matched!! The complete time = " + currentTimeF+","+"tsOpp="+tsOpp+",latencyout="+latencyout);
 
-    for (int i = 0; i < numToDelete1; ++i) {
-      indexQueueIR1.poll();
-    }
-    for (int i = 0; i < numToDelete2; ++i) {
-      indexQueueIR2.poll();
-    }
-    ///generate the intermediate result.
-    for(Pair pairIndex : indexQueue){
-      long ts = getLong(pairIndex.getLeft());
-      if (isWindowJoin && !isInWindow(tsOpp, ts)){
-        ++numToDelete;
-        continue;
+      numOutLatency++;
+      Date date = new Date();
+      long currentTimeF = date.getTime();
+      latency += (currentTimeF - tsOpp);
+
+      for (int i = 0; i < numToDelete1; ++i) {
+//      numMatch1 = numMatch1 - numMatchHubQ1.peek();
+        indexQueueIR1.poll();
+//      numIR_hub1--;
+        output("indexQueueIR1.poll()-----------------");
+        output("\n");
       }
-      interResultYON = false;
-      join(tuple, pairIndex.getRight(), interResultYON, basicOutputCollector); ///看看这个存储是不是这样滴,这个join函数也不一样了。。。
+      for (int i = 0; i < numToDelete2; ++i) {
+//      numMatch2 = numMatch2 - numMatchHubQ2.peek();
+        indexQueueIR2.poll();
+        output("indexQueueIR2.poll()-----------------");
+        output("\n");
+//      numIR_hub2--;
+      }
+      ///generate the intermediate result.
+      isInterResult = false;
+      for (Pair pairIndex : indexQueue) {
+        long ts = getLong(pairIndex.getLeft());
+        if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+          ++numToDelete;
+          continue;
+        }
+        join(tuple, pairIndex.getRight(), isInterResult, basicOutputCollector); ///看看这个存储是不是这样滴,这个join函数也不一样了。。。
+      }
+      join(tuple, currMap, isInterResult, basicOutputCollector);
+
+      for (int i = 0; i < numToDelete; ++i) {
+        indexQueue.poll();
+        output("indexQueue.poll()-----------------");
+        output("\n");
+      }
+    }else if(rel.equals("S")){ ///2joincondition  !!!在处理单元R和T！！！
+      for (Pair pairIndex : indexQueue){
+        long ts = getLong(pairIndex.getLeft());
+        if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+          ++numToDelete;
+          continue;
+        }
+        isInterResult = false;
+        join(tuple, pairIndex.getRight(), isInterResult, basicOutputCollector);
+      }
+      join(tuple, currMap, isInterResult, basicOutputCollector);
+    }else{ ///2joincondition
+      if(rel.equals("T")||rel.equals("R")){////t或r与中间结果连接生成最终结果
+        isInterResult = true;
+        for (Pair pairIRIndex1 : indexQueueIR1) { ///2condition的处理单元R和S就只有一个IR
+          long ts = getLong(pairIRIndex1.getLeft());
+          if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+            ++numToDelete1;
+            continue;
+          }
+          join(tuple, pairIRIndex1.getRight(), isInterResult, basicOutputCollector);
+        }
+        join(tuple, currMapIR1, isInterResult, basicOutputCollector);
+
+/*        numOutLatency++;
+        Date date = new Date();
+        long currentTimeF = date.getTime();
+        latency += (currentTimeF - tsOpp);*/
+
+        for (int i = 0; i < numToDelete1; ++i) {
+          indexQueueIR1.poll();
+          output("indexQueueIR1.poll()-----------------");
+          output("\n");
+        }
+
+      }else if(rel.equals("ST")||rel.equals("SR")){/////sT或sR与存储在本地的R或T相连接，生成最终结果。
+        isInterResult = true;
+        for (Pair pairIndex : indexQueue) { ///2condition的处理单元R和S就只有一个IR  ****注意修改join（），其中是与R和S连接
+          long ts = getLong(pairIndex.getLeft());
+          if (isWindowJoin && !isInWindow(tsOpp, ts)) {
+            ++numToDelete1;
+            continue;
+          }
+          join(tuple, pairIndex.getRight(), isInterResult, basicOutputCollector);
+        }
+        join(tuple, currMap, isInterResult, basicOutputCollector);
+
+        numOutLatency++;
+        Date date = new Date();
+        long currentTimeF = date.getTime();
+        latency += (currentTimeF - tsOpp);
+      }
     }
-    interResultYON = false;
-    join(tuple, currMap, interResultYON, basicOutputCollector);
+
   }
 
   ////
-  public void join(Tuple tuple, Object subIndex, boolean interResultYON, BasicOutputCollector basicOutputCollector) {
+  public void join(Tuple tuple, Object subIndex, boolean isInterResult, BasicOutputCollector basicOutputCollector) {
     String rel = tuple.getStringByField("relation");
-    String key = tuple.getStringByField("key");
-    String value = tuple.getStringByField("value");
-
     long ts = tuple.getLongByField("timestamp");
-    int numinterG = 0;
-    boolean IRMatchedYoN = false;
-    String interresultStr = ",";
+    long seq = tuple.getLongByField("seq");
+    String key = tuple.getStringByField("key");
+    String key2 = tuple.getStringByField("key2");
+    String value = tuple.getStringByField("value");
+    boolean isMatch = false;
+    int numMatchTmp1 = 0, numMatchTmp2 = 0, numMatchTmp = 1;
 
+    String interresultStr = rel+","+ts+","+seq+","+key+","+key2+","+value;
+
+    if(isInterResult){
+      if(rel.equals("ST") || rel.equals("SR")){
+        for (Map.Entry storedTupleP : getEntries(subIndex)){
+          Values storedTuple = (Values) storedTupleP.getValue();
+          Double diff = Double.parseDouble(getString(storedTuple,3))-Double.parseDouble(key);
+          if(Math.abs(diff) < 0.0001){
+            numResults++;
+          }
+        }
+      }else {
+        for (Map.Entry storedTupleP : getArrEntries(subIndex)){
+          String storedKey = (String) storedTupleP.getKey();
+          Double diff = Double.parseDouble(storedKey)-Double.parseDouble(key);
+          if(Math.abs(diff) < 0.0001){
+            numResults++;
+          }
+        }
+      }
+
+    }else {
       for (Map.Entry storedTupleP : getEntries(subIndex)){
         Values storedTuple = (Values) storedTupleP.getValue();
-        if(interResultYON){////subindex is intermediate result, generate the final result.
-          output(relationOne+":" + value + "---- " + tuple.getStringByField("value") );
-        }else{ ////subindex is the tuple that one stream, generate the intermediate result.
-          String values = getString(storedTuple,0)+","+getLong(storedTuple,1)+","+
-                  getString(storedTuple,2)+","+getString(storedTuple,3);
-          interresultStr += values + ",";
-          IRMatchedYoN = true;
-        }
-        store(tuple, getString(storedTuple,0), interresultStr);
-      }
-      if(!IRMatchedYoN){
-        Date date = new Date();
-        long currentTimeF = date.getTime();
-        latencyout = (currentTimeF - ts);
-        latencyoutD = new Date(latencyout);
-        output("Unmatched## The complete time = " + currentTimeF+","+"tsOpp="+ts+",latencyout="+latencyout);
-      }
-  }
+        Double diff = Double.parseDouble(getString(storedTuple,3))-Double.parseDouble(key);
 
-  @SuppressWarnings("unchecked")
-  private Collection<Values> getMatchings(Object index, Object value) {
-    return ((Multimap<Object, Values>) index).get(value);
+        if(Math.abs(diff) < 0.00001){
+          if(!isMatch){
+            isMatch = true;
+            if(rel.equals(relationOne))
+              numIR_hub2++;
+            else if(rel.equals(relationTwo))numIR_hub1++;
+          }
+          if(rel.equals(relationOne)){
+            numMatch2++;
+          }
+          else if(rel.equals(relationTwo)){
+            numMatch1++;
+          }
+
+          String values = getString(storedTuple,0)+","+getLong(storedTuple,1)+","+getLong(storedTuple,2)+","+
+                  getString(storedTuple,3)+","+getString(storedTuple,4)+","+getString(storedTuple,5);
+          interresultStr = interresultStr + "," + values;
+          numMatchTmp++;
+          numIR++;
+        }
+      }
+      if(isMatch) {
+        store(tuple, numMatchTmp, interresultStr);///////##########################这里3月30日改过！！！！！！
+        if(JoinCondition.equals("2JCondition")){
+          if(taskRelation.equals("R"))basicOutputCollector.emit(SR_RESULTSTREAM_ID, new Values("SR", ts, seq, key, key2, value));
+          if(taskRelation.equals("T"))basicOutputCollector.emit(ST_RESULTSTREAM_ID, new Values("ST", ts, seq, key, key2, value));
+        }
+      }
+      ///这里3月30日改过！！！！！！0512
+    }
+
   }
 
   @SuppressWarnings("unchecked")
@@ -373,6 +563,11 @@ public class JoinBolt extends BaseBasicBolt {
   }
 
   @SuppressWarnings("unchecked")
+  private Collection< Map.Entry<Object, String[]> > getArrEntries(Object index) {
+    return ((Multimap<Object, String[]>) index).entries();
+  }
+
+    @SuppressWarnings("unchecked")
   private int getIndexSize(Object index) {
     return ((Multimap<Object, Values>) index).size();
   }
@@ -389,7 +584,10 @@ public class JoinBolt extends BaseBasicBolt {
   }
 
   public boolean isInWindow(long tsNewTuple, long tsStoredTuple) {
-    return Math.abs(tsNewTuple - tsStoredTuple) <= windowLength;
+    if(Math.abs(tsNewTuple - tsStoredTuple) <= windowLength)return true;
+    else {
+      return false;
+    }
   }
 
   public boolean isTimeToOutputProfile() {

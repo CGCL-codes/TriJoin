@@ -29,11 +29,12 @@ public class DispatchBolt extends BaseBasicBolt {
   private boolean barrierEnable = false;
   private Date DLastBarrier = new Date();
   private long dLastBarrier = DLastBarrier.getTime();
+  private String dispStrategy;
 
   @Override
   public void prepare(Map stormConf, TopologyContext context) {
     super.prepare(stormConf, context);
-
+    seqDis = 0;
   }
 
   public DispatchBolt(boolean be, long bp){
@@ -46,7 +47,7 @@ public class DispatchBolt extends BaseBasicBolt {
     String rel = tuple.getStringByField("relation");
     Date date = new Date();
     Long ts = date.getTime();
-//    Long seq = seqDis;
+    Long seq = seqDis;
     String key = tuple.getStringByField("key");
     String key2 = tuple.getStringByField("key2");
     String value = tuple.getStringByField("value");
@@ -69,8 +70,7 @@ public class DispatchBolt extends BaseBasicBolt {
       dLastBarrier = datenow;
       String relt = "TimeStamp";
       Values timetuple = new Values(relt, datenow, seqDis, key, key2, value); ///key, key2, value 这三个值是没用的，只为共享模型
-
-      basicOutputCollector.emit(BROADCAST_R_STREAM_ID, timetuple);
+      basicOutputCollector.emit(TIMESTAMP_SEQ_ID, timetuple);
     }
   }
 
@@ -82,6 +82,7 @@ public class DispatchBolt extends BaseBasicBolt {
     outputFieldsDeclarer.declareStream(BROADCAST_R_STREAM_ID, new Fields(SCHEMA));
     outputFieldsDeclarer.declareStream(BROADCAST_S_STREAM_ID, new Fields(SCHEMA));
     outputFieldsDeclarer.declareStream(BROADCAST_T_STREAM_ID, new Fields(SCHEMA));
+    outputFieldsDeclarer.declareStream(TIMESTAMP_SEQ_ID, new Fields(SCHEMA));
   }
 
   @Override
