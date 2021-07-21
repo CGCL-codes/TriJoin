@@ -19,7 +19,7 @@ import static com.google.common.io.Files.newWriter;
 
 public class FileWriter
 {
-    private static final int DEFAULT_FLUSH_SIZE = 512;
+    private static final int DEFAULT_FLUSH_SIZE = 512; //1024;
     private static final Logger LOG = getLogger(FileWriter.class);
 
     private final String _filename;
@@ -154,7 +154,7 @@ public class FileWriter
     private void append(String msg) {
         if (_writer != null) {
             try {
-                _writer.append(msg + "\n");
+                _writer.append(msg + ", ");
             }
             catch (IOException e) {
                 LOG.error(e.getMessage());
