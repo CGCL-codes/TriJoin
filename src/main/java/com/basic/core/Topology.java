@@ -5,14 +5,8 @@ import static com.basic.core.Utils.StormRunner.runCluster;
 import static com.basic.core.Utils.StormRunner.runLocal;
 import static org.slf4j.LoggerFactory.getLogger;
 
-import com.basic.core.Component.CollectBolt;
-import com.basic.core.Component.DispatchBolt;
+import com.basic.core.Component.*;
 //import com.basic.core.Component.DuplicateBolt;
-import com.basic.core.Component.JoinBolt;
-import com.basic.core.Component.JoinHashBolt;
-import com.basic.core.Component.MetricBolt;
-import com.basic.core.Component.RandomDataSpout;
-import com.basic.core.Component.ShuffleBolt;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.storm.Config;
 import org.apache.storm.generated.StormTopology;
@@ -27,8 +21,6 @@ import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
-
-import com.basic.core.Utils.FileWriter;
 
 public class Topology {
 
@@ -94,13 +86,13 @@ public class Topology {
     TopologyBuilder builder = new TopologyBuilder();
 
     if (remoteMode) {
-      builder.setSpout(KAFKA_SPOUT_ID_R, new RandomDataSpout("R"), topologyArgs.numKafkaSpouts);
-      builder.setSpout(KAFKA_SPOUT_ID_S, new RandomDataSpout("S"), topologyArgs.numKafkaSpouts);
-      builder.setSpout(KAFKA_SPOUT_ID_T, new RandomDataSpout("T"), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_R, new RandomDataSpout("R", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_S, new RandomDataSpout("S", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_T, new RandomDataSpout("T", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
     } else {
-      builder.setSpout(KAFKA_SPOUT_ID_R, new RandomDataSpout("R"), topologyArgs.numKafkaSpouts);
-      builder.setSpout(KAFKA_SPOUT_ID_S, new RandomDataSpout("S"), topologyArgs.numKafkaSpouts);
-      builder.setSpout(KAFKA_SPOUT_ID_T, new RandomDataSpout("T"), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_R, new RandomDataSpout("R", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_S, new RandomDataSpout("S", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
+      builder.setSpout(KAFKA_SPOUT_ID_T, new RandomDataSpout("T", topologyArgs.inputfile, topologyArgs.tupleRate), topologyArgs.numKafkaSpouts);
     }
 
     builder.setBolt(SHUFFLE_BOLT_ID, new ShuffleBolt(topologyArgs.rate), topologyArgs.numShufflers)
@@ -120,45 +112,71 @@ public class Topology {
 
       builder.setBolt(JOINER_RS_BOLT_ID, joinerRS, topologyArgs.numPartitionsR)
         .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_R_STREAM_ID, new Fields("key"))
-        .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID, new Fields("key"));
+        .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID, new Fields("key"))
+        .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
       builder.setBolt(JOINER_T_BOLT_ID, joinerT, topologyArgs.numPartitionsT)
         .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_T_STREAM_ID, new Fields("key2"))
         .fieldsGrouping(JOINER_RS_BOLT_ID, RS_RESULTSTREAM_ID, new Fields("key2"))
-        .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID, new Fields("key2"));
+        .fieldsGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID, new Fields("key2"))
+        .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
 
-      builder.setBolt(METRIC_BOLT_ID, new MetricBolt(topologyArgs.numPartitionsR + topologyArgs.numPartitionsS + topologyArgs.numPartitionsT), 1)
-              .shuffleGrouping(JOINER_RS_BOLT_ID, METRIC_STREAM_ID)
+      builder.setBolt(METRIC_BOLT_ID, new PostProcessBolt(topologyArgs.numPartitionsT), 1)
               .shuffleGrouping(JOINER_T_BOLT_ID, METRIC_STREAM_ID);
 
     } else if (topologyArgs.strategy.equals(TopologyArgs.RANDOM_STRATEGY)) {
 
       JoinBolt joinerR = new JoinBolt("R", "S", "T", topologyArgs.barrierEnable,
-              topologyArgs.barrierPeriod, topologyArgs.numDispatcher);
+              topologyArgs.barrierPeriod, topologyArgs.numDispatcher, topologyArgs.joincondition);
       JoinBolt joinerS = new JoinBolt("S", "T", "R", topologyArgs.barrierEnable,
-              topologyArgs.barrierPeriod, topologyArgs.numDispatcher);
+              topologyArgs.barrierPeriod, topologyArgs.numDispatcher, topologyArgs.joincondition);
       JoinBolt joinerT = new JoinBolt("T", "R", "S", topologyArgs.barrierEnable,
-              topologyArgs.barrierPeriod, topologyArgs.numDispatcher);
+              topologyArgs.barrierPeriod, topologyArgs.numDispatcher, topologyArgs.joincondition);
 
       builder.setBolt(DISPATCHER_BOLT_ID, new DispatchBolt(topologyArgs.barrierEnable,topologyArgs.barrierPeriod), topologyArgs.numDispatcher)
         .shuffleGrouping(SHUFFLE_BOLT_ID);
 
-      builder.setBolt(JOINER_R_BOLT_ID, joinerR, topologyArgs.numPartitionsR)
-        .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_R_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID);
-      builder.setBolt(JOINER_S_BOLT_ID, joinerS, topologyArgs.numPartitionsS)
-        .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID);
-      builder.setBolt(JOINER_T_BOLT_ID, joinerT, topologyArgs.numPartitionsT)
-        .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_T_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
-        .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID);
+      if(topologyArgs.joincondition.equals("3JCondition")){
+        builder.setBolt(JOINER_R_BOLT_ID, joinerR, topologyArgs.numPartitionsR)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+        builder.setBolt(JOINER_S_BOLT_ID, joinerS, topologyArgs.numPartitionsS)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+        builder.setBolt(JOINER_T_BOLT_ID, joinerT, topologyArgs.numPartitionsT)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_T_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+      }else {
+        builder.setBolt(JOINER_R_BOLT_ID, joinerR, topologyArgs.numPartitionsR)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID)
+                .allGrouping(JOINER_T_BOLT_ID, ST_RESULTSTREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+        builder.setBolt(JOINER_S_BOLT_ID, joinerS, topologyArgs.numPartitionsS)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_S_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_T_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+        builder.setBolt(JOINER_T_BOLT_ID, joinerT, topologyArgs.numPartitionsT)
+                .shuffleGrouping(DISPATCHER_BOLT_ID, SHUFFLE_T_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_R_STREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, BROADCAST_S_STREAM_ID)
+                .allGrouping(JOINER_R_BOLT_ID, SR_RESULTSTREAM_ID)
+                .allGrouping(DISPATCHER_BOLT_ID, TIMESTAMP_SEQ_ID);
+      }
 
-      builder.setBolt(METRIC_BOLT_ID, new MetricBolt(topologyArgs.numPartitionsR + topologyArgs.numPartitionsS + topologyArgs.numPartitionsT), 1)
-              .shuffleGrouping(JOINER_R_BOLT_ID, METRIC_STREAM_ID)
-              .shuffleGrouping(JOINER_S_BOLT_ID, METRIC_STREAM_ID)
-              .shuffleGrouping(JOINER_T_BOLT_ID, METRIC_STREAM_ID);
+
+
+      builder.setBolt(METRIC_BOLT_ID, new PostProcessBolt(topologyArgs.numPartitionsR + topologyArgs.numPartitionsS + topologyArgs.numPartitionsT), 1)
+        .shuffleGrouping(JOINER_R_BOLT_ID, METRIC_STREAM_ID)
+        .shuffleGrouping(JOINER_S_BOLT_ID, METRIC_STREAM_ID)
+        .shuffleGrouping(JOINER_T_BOLT_ID, METRIC_STREAM_ID);
 
     }
 

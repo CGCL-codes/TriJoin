@@ -35,6 +35,7 @@ public class TopologyArgs implements Serializable {
   private static final String JOIN_OPERATOR = "=";
 
   private static final String TOPOLOGY_NAME = "TriJoin";
+//  private static final String JCondition = "3condition";
 
   private static final int DEFAULT_INT_LOWER = 0;
   private static final int DEFAULT_INT_UPPER = 20000;
@@ -85,17 +86,6 @@ public class TopologyArgs implements Serializable {
     usage = "# workers [def:2]")
   public int numWorkers = 2;
 
-  //    @Option(name = "-rs", aliases = "--source-rs", metaVar = "<num>",
-//            usage = "# random data sources (mixing relations) [def:1]")
-//    public int numGenerators = 1;
-//
-//    @Option(name = "-r", aliases = "--source-r", metaVar = "<num>",
-//            usage = "# random data sources of relation R [def:0]")
-//    public int numGeneratorsR = 0;
-//
-//    @Option(name = "-s", aliases = "--source-s", metaVar = "<num>",
-//            usage = "# random data sources of relation S [def:0]")
-//    public int numGeneratorsS = 0;
   @Option(name = "-ks", aliases = "--source-rs", metaVar = "<num>",
     usage = "# random data sources (mixing relations) [def:1]")
   public int numKafkaSpouts = 1;
@@ -120,10 +110,14 @@ public class TopologyArgs implements Serializable {
           usage = "# partitions of relation T [def:4]")
   public int numPartitionsT = 5;
 
+  @Option(name = "-tupler", aliases = "--tupleRate", metaVar = "<num>",
+          usage = "# tupleRate of dataSpout")
+  public int tupleRate = 1000;
+
   @Option(name = "-dr", aliases = "--Duplicate-result", metaVar = "<num>",
     usage = "# collector [def:8]")
   public int numDuplicate = 1;
-//////numGatherers是干啥的？
+
   @Option(name = "-g", aliases = "--gatherer", metaVar = "<num>",
     usage = "# result gatherers [def:1]")
   public int numGatherers = 1;
@@ -149,7 +143,7 @@ public class TopologyArgs implements Serializable {
 
   @Option(name = "--index-size", metaVar = "<num>", hidden = false,
     usage = "size (in records) of each sub-index [def:2048]")
-  public Integer subindexSize = 2048;
+  public Integer subindexSize = 512;//2048
 
   @Option(name = "-win", aliases = "--window",
     usage = "enable sliding window [def:false]")
@@ -199,6 +193,13 @@ public class TopologyArgs implements Serializable {
     usage = "output directory [def:null]")
   public String outputDir = null;
 
+  @Option(name = "-infile", aliases = "--input-file", metaVar = "<path>",
+          usage = "input directory [def:null]")
+  public String inputfile = null;
+
+  @Option(name = "-joincondition", aliases = "--join-condition", metaVar = "<path>",
+          usage = "join condition [def:3condition]")
+  public String joincondition = "3JCondition"; //or 2JCondition
 
   @Option(name = "-x", aliases = "--topic")
   public String topic = "didi";
@@ -334,12 +335,6 @@ public class TopologyArgs implements Serializable {
         operator), "Invalid join operator: " + operator);
 
     checkState(numWorkers > 0, "At least one worker is required");
-//        checkState(numGenerators >= 0,
-//                "Non-negative number of sources R&S is required");
-//        checkState(numGeneratorsR >= 0,
-//                "Non-negative number of sources R is required");
-//        checkState(numGeneratorsS >= 0,
-//                "Non-negative number of sources S is required");
     checkState(numShufflers > 0, "At least one shuffler is required");
     checkState(numDispatcher > 0, "At least one reshuffler is required");
     checkState(numPartitionsR > 0, "At least one partition R is required");
@@ -446,6 +441,9 @@ public class TopologyArgs implements Serializable {
       info.add("  output dir: " + outputDir);
     }
     info.add("  simple output: " + simple);
+
+    info.add("  output dir: " + inputfile);
+    info.add("  tupleRate: " + tupleRate);
 
     return info;
   }
