@@ -53,7 +53,7 @@ public class RandomDataSpout extends BaseRichSpout {
     tuplesPerTime = tupleRate/10;
 
     try {
-      bufferedReader = new BufferedReader(new FileReader("/home/shuiyinyu/join/didi/" + rel + "/" + inputFile)); ///   /home/shuiyinyu/join/didi/  /yushuiy/data/
+      bufferedReader = new BufferedReader(new FileReader("/join/didi/" + rel + "/" + inputFile)); ///
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     }
@@ -66,9 +66,6 @@ public class RandomDataSpout extends BaseRichSpout {
     for (int i = 0; i < tuplesPerTime; i++) {
       Values values = null;
       String line = null;
-//      line = (random.nextInt(10000)+","+random.nextInt(10000)+","+random.nextInt(10000)+","+random.nextInt(10000));
-//      values = new Values(topic, line);
-//      spoutOutputCollector.emit(values);
       try {
         if ((line = bufferedReader.readLine()) != null) {
           values = new Values(topic, line);
