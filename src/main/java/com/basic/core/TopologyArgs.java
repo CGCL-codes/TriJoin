@@ -10,7 +10,6 @@ import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.List;
 import org.kohsuke.args4j.*;
-//import com.basic.core.Utils.TimeUtils;
 import static com.basic.core.Utils.SchemaUtils.getFieldIdx;
 import static com.basic.core.Utils.TimeUtils.getTimestamp;
 import org.slf4j.Logger;
@@ -35,7 +34,6 @@ public class TopologyArgs implements Serializable {
   private static final String JOIN_OPERATOR = "=";
 
   private static final String TOPOLOGY_NAME = "TriJoin";
-//  private static final String JCondition = "3condition";
 
   private static final int DEFAULT_INT_LOWER = 0;
   private static final int DEFAULT_INT_UPPER = 20000;
