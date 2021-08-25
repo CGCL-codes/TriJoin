@@ -88,7 +88,7 @@ public class JoinBolt extends BaseBasicBolt {
   private Multimap<Object, String[]> currMapIR2;
   private Queue<Pair> indexQueueIR1;
   private Queue<Pair> indexQueueIR2;
-  private Queue<Integer> numMatchHubQ1,numMatchHubQ2; ///准备用来测试有多少个中间结果在，包括hub tuple和与之匹配的tuple。
+  private Queue<Integer> numMatchHubQ1,numMatchHubQ2;
   private FileWriter output;
   private int tid, numDispatcher, seqDAi;
   private long tst;
@@ -401,18 +401,14 @@ public class JoinBolt extends BaseBasicBolt {
       latency += (currentTimeF - tsOpp);
 
       for (int i = 0; i < numToDelete1; ++i) {
-//      numMatch1 = numMatch1 - numMatchHubQ1.peek();
         indexQueueIR1.poll();
-//      numIR_hub1--;
         output("indexQueueIR1.poll()-----------------");
         output("\n");
       }
       for (int i = 0; i < numToDelete2; ++i) {
-//      numMatch2 = numMatch2 - numMatchHubQ2.peek();
         indexQueueIR2.poll();
         output("indexQueueIR2.poll()-----------------");
         output("\n");
-//      numIR_hub2--;
       }
       ///generate the intermediate result.
       isInterResult = false;
@@ -422,7 +418,7 @@ public class JoinBolt extends BaseBasicBolt {
           ++numToDelete;
           continue;
         }
-        join(tuple, pairIndex.getRight(), isInterResult, basicOutputCollector); ///看看这个存储是不是这样滴,这个join函数也不一样了。。。
+        join(tuple, pairIndex.getRight(), isInterResult, basicOutputCollector);
       }
       join(tuple, currMap, isInterResult, basicOutputCollector);
 
@@ -431,7 +427,7 @@ public class JoinBolt extends BaseBasicBolt {
         output("indexQueue.poll()-----------------");
         output("\n");
       }
-    }else if(rel.equals("S")){ ///2joincondition  !!!在处理单元R和T！！！
+    }else if(rel.equals("S")){
       for (Pair pairIndex : indexQueue){
         long ts = getLong(pairIndex.getLeft());
         if (isWindowJoin && !isInWindow(tsOpp, ts)) {
@@ -443,9 +439,9 @@ public class JoinBolt extends BaseBasicBolt {
       }
       join(tuple, currMap, isInterResult, basicOutputCollector);
     }else{ ///2joincondition
-      if(rel.equals("T")||rel.equals("R")){////t或r与中间结果连接生成最终结果
+      if(rel.equals("T")||rel.equals("R")){
         isInterResult = true;
-        for (Pair pairIRIndex1 : indexQueueIR1) { ///2condition的处理单元R和S就只有一个IR
+        for (Pair pairIRIndex1 : indexQueueIR1) {
           long ts = getLong(pairIRIndex1.getLeft());
           if (isWindowJoin && !isInWindow(tsOpp, ts)) {
             ++numToDelete1;
@@ -455,20 +451,15 @@ public class JoinBolt extends BaseBasicBolt {
         }
         join(tuple, currMapIR1, isInterResult, basicOutputCollector);
 
-/*        numOutLatency++;
-        Date date = new Date();
-        long currentTimeF = date.getTime();
-        latency += (currentTimeF - tsOpp);*/
-
         for (int i = 0; i < numToDelete1; ++i) {
           indexQueueIR1.poll();
           output("indexQueueIR1.poll()-----------------");
           output("\n");
         }
 
-      }else if(rel.equals("ST")||rel.equals("SR")){/////sT或sR与存储在本地的R或T相连接，生成最终结果。
+      }else if(rel.equals("ST")||rel.equals("SR")){
         isInterResult = true;
-        for (Pair pairIndex : indexQueue) { ///2condition的处理单元R和S就只有一个IR  ****注意修改join（），其中是与R和S连接
+        for (Pair pairIndex : indexQueue) {
           long ts = getLong(pairIndex.getLeft());
           if (isWindowJoin && !isInWindow(tsOpp, ts)) {
             ++numToDelete1;
@@ -546,13 +537,12 @@ public class JoinBolt extends BaseBasicBolt {
         }
       }
       if(isMatch) {
-        store(tuple, numMatchTmp, interresultStr);///////##########################这里3月30日改过！！！！！！
+        store(tuple, numMatchTmp, interresultStr);
         if(JoinCondition.equals("2JCondition")){
           if(taskRelation.equals("R"))basicOutputCollector.emit(SR_RESULTSTREAM_ID, new Values("SR", ts, seq, key, key2, value));
           if(taskRelation.equals("T"))basicOutputCollector.emit(ST_RESULTSTREAM_ID, new Values("ST", ts, seq, key, key2, value));
         }
       }
-      ///这里3月30日改过！！！！！！0512
     }
 
   }
