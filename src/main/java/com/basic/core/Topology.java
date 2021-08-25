@@ -6,7 +6,6 @@ import static com.basic.core.Utils.StormRunner.runLocal;
 import static org.slf4j.LoggerFactory.getLogger;
 
 import com.basic.core.Component.*;
-//import com.basic.core.Component.DuplicateBolt;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.storm.Config;
 import org.apache.storm.generated.StormTopology;
@@ -24,7 +23,7 @@ import org.slf4j.Logger;
 
 public class Topology {
 
-  public static final String KAFKA_BROKER = "node21:9092,node104:9092,node105:9092";// 这里不会...
+  public static final String KAFKA_BROKER = "node21:9092,node104:9092,node105:9092";
   private static final Logger LOG = getLogger(Topology.class);
   private final TopologyArgs topologyArgs = new TopologyArgs(Topology.class.getName());
 
