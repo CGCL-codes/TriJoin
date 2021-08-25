@@ -47,9 +47,7 @@ public class RandomDataSpout extends BaseRichSpout {
   @Override
   public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
     random = new Random();
-
     spoutOutputCollector = collector;
-
     tuplesPerTime = tupleRate/10;
 
     try {
@@ -57,7 +55,6 @@ public class RandomDataSpout extends BaseRichSpout {
     } catch (FileNotFoundException e) {
       e.printStackTrace();
     }
-
   }
   ///
 
