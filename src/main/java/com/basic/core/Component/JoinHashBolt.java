@@ -158,7 +158,7 @@ public class JoinHashBolt extends BaseBasicBolt {
 
     tid = context.getThisTaskId();
     String prefix = "srj_joiner_" + taskRelation.toLowerCase() + tid;
-    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpresult/TriJoin-HTP/", prefix, "txt");
+    output = new FileWriter("/apache-storm-1.2.3/tmpresult/TriJoin-HTP/", prefix, "txt");
   }
 
   @Override
@@ -246,7 +246,6 @@ public class JoinHashBolt extends BaseBasicBolt {
       SortedTuple tempTuple = bufferedTuples.peek();
       if (tempTuple.getTuple().getLongByField("timestamp") <= barrier) {
         executeTuple(tempTuple.getTuple(), basicOutputCollector);
-//        latency += (stopWatch.elapsed(TimeUnit.MICROSECONDS) - tempTuple.getTimeStamp()) / 1000;
         bufferedTuples.poll();
       } else {
         break;
@@ -394,7 +393,7 @@ public class JoinHashBolt extends BaseBasicBolt {
           ++numToDeleteS;
           continue;
         }
-        join(tuple, pairIndex.getRight(), false, basicOutputCollector); ///看看这个存储是不是这样滴,这个join函数也不一样了。。。
+        join(tuple, pairIndex.getRight(), false, basicOutputCollector);
       }
       join(tuple, currMap, false, basicOutputCollector);
       store(tuple); ///indexQueueS,currMapS
@@ -405,7 +404,7 @@ public class JoinHashBolt extends BaseBasicBolt {
           ++numToDeleteRoT;
           continue;
         }
-        join(tuple, pairIndex.getRight(), false, basicOutputCollector); ///看看这个存储是不是这样滴,这个join函数也不一样了。。。
+        join(tuple, pairIndex.getRight(), false, basicOutputCollector);
       }
       join(tuple, currMapS, false, basicOutputCollector);
       store(tuple);////currMap; indexQueue.
@@ -435,13 +434,10 @@ public class JoinHashBolt extends BaseBasicBolt {
     if(interResultYON){////subindex is intermediate result, output the final result.
       if(rel.equals("T")){
         for(Values storedTupleP : getMatchings(subIndex,key)){
-          ///output the final result.
-//          output("The output####");
           isMatch = true;
           }
         } else {
           for (Values storedTuple : getMatchings(subIndex, key)){
-//            output("The output###"+rel+":" + value + "---- " + tuple.getStringByField("value"));
             isMatch = true;
           }
         }
