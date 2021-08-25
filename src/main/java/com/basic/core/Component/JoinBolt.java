@@ -164,7 +164,7 @@ public class JoinBolt extends BaseBasicBolt {
 
     tid = context.getThisTaskId();
     String prefix = "srj_joiner_" + taskRelation.toLowerCase() + tid;
-    output = new FileWriter("/yushuiy/apache-storm-1.2.3/tmpResult/TriJoin-R-TP-3500perS/", prefix, "txt");
+    output = new FileWriter("/apache-storm-1.2.3/tmpResult/TriJoin-R-TP-3500perS/", prefix, "txt");
 
   }
 
