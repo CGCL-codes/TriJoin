@@ -176,12 +176,8 @@ public class JoinHashBolt extends BaseBasicBolt {
     if(relR.equals("R"))countRPSec++;
     else if(relR.equals("S"))countSPSec++;
     else if(relR.equals("T"))countTPSec++;
-//    output("currentTime");
     Date date = new Date();
-//    long currentTime = stopWatch.elapsed(TimeUnit.MICROSECONDS);
     long currentTime = date.getTime();
-//    gapThrough = currentTime;
-
     executeTuple(tuple, basicOutputCollector);
 
     if (isTimeToOutputProfile()) {
@@ -200,23 +196,15 @@ public class JoinHashBolt extends BaseBasicBolt {
       long  numIR_hub = 0, numMatch = 0;
       basicOutputCollector.emit(METRIC_STREAM_ID, new Values(moment, numOutLatency, joinTimes, processingDuration, latencyout,
               numResults, countPSec, numIR_hub, numMatch));
-//      basicOutputCollector.emit(METRIC_STREAM_ID, new Values(moment, countPSec, joinTimes, processingDuration, latency,
-//                numResults, numOutLatency));
       output(",numOutLatency="+numOutLatency+",average latency="+latencyout/numOutLatency);
       numLastProcessed = numTuplesStored + numTuplesJoined;
       lastOutputTime = stopWatch.elapsed(TimeUnit.MILLISECONDS);
       numJoinedResults = numLastJoinedResults;
       latencyout = 0;
       numOutLatency = 0;
-//      numTuplesJoined = 0;
       countPSec = 0;
     }
-/*    long processingDuration = stopWatch.elapsed(TimeUnit.MILLISECONDS) - lastOutputTime;
-    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss",Locale.getDefault());
-    sdf.setTimeZone(TimeZone.getTimeZone("GMT+0"));
-    Date dateLatency = new Date(latencyout+8*60*60*1000);
-    sdf.format(dateLatency);
-    output("latencyout="+latencyout+", latencyoutD= " + dateLatency.toString() + ",processingDuration= "+ processingDuration);*/
+
   }
 
   public void executeTuple(Tuple tuple, BasicOutputCollector basicOutputCollector) {
@@ -288,7 +276,6 @@ public class JoinHashBolt extends BaseBasicBolt {
         currMapS = LinkedListMultimap.create(subIndexSize);
       }
     } else if (rel.equals("RS")){
-//      String valuesS = rel+","+ts+","+key+","+key2+","+value;
       currMapIRRS.put(key, values);
       numInterResultStoredOne++;
       if (currMapIRRS.size() >= subIndexSize){
@@ -307,8 +294,6 @@ public class JoinHashBolt extends BaseBasicBolt {
     String key2 = tuple.getStringByField("key2");
     String value = tuple.getStringByField("value");
 
-//    String valuess = rel + "," + ts + "," +  key + "," + key2 + "," + value;
-//    valuess += interresultS;
       String[] values = interresultS.split(",");
       String mulTupleA[];
       mulTupleA = new String[6*numFollower];
