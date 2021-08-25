@@ -69,7 +69,7 @@ public class DispatchBolt extends BaseBasicBolt {
       seqDis = seqDis + 1;
       dLastBarrier = datenow;
       String relt = "TimeStamp";
-      Values timetuple = new Values(relt, datenow, seqDis, key, key2, value); ///key, key2, value 这三个值是没用的，只为共享模型
+      Values timetuple = new Values(relt, datenow, seqDis, key, key2, value);
       basicOutputCollector.emit(TIMESTAMP_SEQ_ID, timetuple);
     }
   }
