@@ -1,7 +1,6 @@
 # TriJoin
 
-TriJoin is a high-efficiency and scalable three-way steam join system. In order to reduce the  processing  latency,  we  idealize  a  latency  model,  and design the TriJoin according to the idealized latency model. In view  of  different  join  conditions,  we  design  different  stream data  partition  and  join  processing  scheme.  For  general  high-selectivity join, which is when the combination of all or most of  the  tuples  in  the  three  steams  may  produce  join  results, TriJoin adopts a hybrid partition scheme to ensure any tuples in  the  three  streams  completes  exactly  one  join  operation; for low-selectivity join such as equi-join, TriJoin employs an optimized hash partitioning scheme. This scheme can route alltuples  with  the  same  key  to  the  same  processing  unit,  which reduces  the  unnecessary  cost  of  join  operations  and storage. In  order  to  ensure  the  high  timeliness  of  the  system,  Tri-Join correspondingly designed an efficient intermediate resultstorage  structure,  thereby  reducing  the  repeated  operation  of intermediate results and significantly reducing the processing latency. 
-
+TriJoin is a high-efficiency and scalable three-way steam join system. Stream join applications usually use three-way join, which can be used to stream Multi-join.
 ## How to use?
 
 ### Environment
