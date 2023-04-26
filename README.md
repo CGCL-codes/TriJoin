@@ -5,7 +5,7 @@ TriJoin is a high-efficiency and scalable three-way steam join system. Stream jo
 
 ### Environment
 
-We implement Simois atop Apache Storm (version 1.2.3 or higher), and deploy the system on a cluster. Each machine is equipped with an octa-core 2.4GHz Xeon CPU, 64.0GB RAM, and a 1000Mbps Ethernet interface card. One machine in the cluster serves as the master node to host the Storm Nimbus. The other machines run Storm supervisors.
+We implement TriJoin atop Apache Storm (version 1.2.3 or higher), and deploy the system on a cluster. Each machine is equipped with an octa-core 2.4GHz Xeon CPU, 64.0GB RAM, and a 1000Mbps Ethernet interface card. One machine in the cluster serves as the master node to host the Storm Nimbus. The other machines run Storm supervisors.
 
 Build and run the example
 
